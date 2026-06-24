@@ -1,0 +1,21 @@
+{
+  "name": "metasuke",
+  "version": "0.0.0",
+  "private": true,
+  "description": "AI支援つきメール／問い合わせ共有管理ツール",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @metasuke/web",
+    "build": "npm run build -w @metasuke/web",
+    "typecheck": "npm run typecheck -w @metasuke/web",
+    "db:push": "supabase db push",
+    "functions:serve": "supabase functions serve",
+    "supabase:start": "supabase start"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
