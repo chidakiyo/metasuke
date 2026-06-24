@@ -45,3 +45,6 @@ verify_jwt = false
 
 [functions.draft]
 verify_jwt = false
+
+[functions.admin]
+verify_jwt = false
