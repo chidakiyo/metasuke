@@ -1,0 +1,47 @@
+# Supabase ローカル設定（最小）。`supabase init` で生成されるものの簡易版。
+# 不足キーがあれば `supabase init` を別所で実行して差分を取り込む。
+project_id = "metasuke"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+[inbucket]
+enabled = true
+port = 54324
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:5173"
+additional_redirect_urls = ["http://127.0.0.1:5173"]
+jwt_expiry = 3600
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+# ローカルではメール確認なしでサインアップ可能にする（本番は true 推奨）
+enable_confirmations = false
+
+[functions.api]
+verify_jwt = false
+
+[functions.inbound]
+verify_jwt = false
+
+[functions.send]
+verify_jwt = false
+
+[functions.draft]
+verify_jwt = false
