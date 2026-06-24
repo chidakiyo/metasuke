@@ -1,54 +1,35 @@
 # metasuke
 
-AI支援つきメール／問い合わせ共有管理ツール。設計は `docs/` を参照。
+AI支援つきメール／問い合わせ共有管理ツール。**作業コンテキストは `CLAUDE.md`**、設計は `docs/` を参照。
 
-- `docs/01-requirements.md` 要件定義
-- `docs/02-architecture.md` 技術設計（Vite+React / Hono on Supabase Edge Functions / Supabase / Mailgun / Cloudflare Pages配信）
-- `docs/03-mvp-roadmap.md` MVPロードマップ
-- `docs/04-data-schema.md` ＋ `supabase/migrations/0001_init.sql` DBスキーマ＋RLS
+- `docs/01-requirements.md` 要件定義 / `docs/02-architecture.md` 技術設計 / `docs/03-mvp-roadmap.md` ロードマップ
+- `docs/04-data-schema.md` スキーマ / `docs/05-cloud-dev-setup.md` クラウドdev / `docs/06-platform-admin-design.md` 運営画面
 
 ## 構成（モノレポ / npm workspaces）
 ```
-apps/web              … Vite + React (TS) SPA。Cloudflare Pages で配信
-packages/shared       … 共有ドメイン型（フロント/関数で共用）
-supabase/migrations   … DBスキーマ（RLS含む）
-supabase/functions/api … Hono API（Edge Functions / Deno）
+apps/web              … テナント用アプリ（Vite+React）。Cloudflare Pages で配信（dev: 5174）
+apps/admin            … 事業管理者コンソール（Vite+React）。別サイト配信（dev: 5175）
+packages/shared       … 共有ドメイン型
+supabase/migrations   … DBスキーマ（RLS含む, 0001〜）
+supabase/functions    … Edge Functions（api / inbound / send / draft / admin）
 ```
+
+> 現在はクラウド Supabase に直結して開発（Docker不要）。起動コマンド・テストアカウントは `CLAUDE.md`。
 
 ## 前提ツール
 - Node 20+（`.nvmrc`）
-- [Supabase CLI](https://supabase.com/docs/guides/cli)（要インストール）
-- Docker（`supabase start` のローカルスタックに必要）
+- [Supabase CLI](https://supabase.com/docs/guides/cli)（マイグレーション/関数デプロイ用）
+- ※ **クラウド Supabase に直結**して開発するため Docker は不要
 
-## セットアップ
+## セットアップ & 起動
 ```bash
 npm install
+cp apps/web/.env.example apps/web/.env       # クラウドの URL / anon key / FUNCTIONS_URL を設定
+cp apps/admin/.env.example apps/admin/.env
 
-# Supabase ローカルを起動（Postgres/Auth/Studio 等）
-supabase start
-# 出力された API URL / anon key を控える
-
-# マイグレーション適用（スキーマ＋RLS）
-supabase db reset      # 初回。以降は supabase migration up / db push
-
-# フロントの環境変数
-cp apps/web/.env.example apps/web/.env
-#   VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY を supabase start の出力で埋める
+# 別プロジェクト(grouptool)が 5173 を使うためポートを固定して起動
+npm run dev -w @metasuke/web   -- --port 5174 --strictPort   # テナントアプリ http://localhost:5174
+npm run dev -w @metasuke/admin -- --port 5175 --strictPort   # 運営コンソール http://localhost:5175
 ```
 
-## 起動
-```bash
-# フロント
-npm run dev            # http://127.0.0.1:5173
-
-# API（Edge Functions ローカル）
-supabase functions serve api
-# health: GET http://127.0.0.1:54321/functions/v1/api/health
-```
-
-## Phase 0 の確認（RLSのテナント分離）
-1. 2つのメールアドレスでそれぞれ新規登録・ログイン。
-2. 各アカウントで組織を作成。
-3. 互いの組織が **一覧に出ないこと**（RLSで越境ゼロ）を確認。
-
-詳細な進め方は `docs/03-mvp-roadmap.md`。
+スキーマ適用・関数デプロイ・テストアカウント・本番配信などの詳細は **`CLAUDE.md`** と `docs/05-cloud-dev-setup.md` を参照。

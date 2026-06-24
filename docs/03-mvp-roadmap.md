@@ -13,7 +13,8 @@
 - ✅ **Phase 3 二重対応防止** … Realtime在席・編集中警告・送信前競合検知
 - ✅ **Phase 4a AI下書き** … OpenAI（or dry-run）・AI ON/OFF・月次上限
 - ✅ **メンバー招待**（招待リンク方式。メール自動化は将来）
-- ⏳ 残り：Phase 4b BYOK／実OpenAI・実Mailgun有効化（secrets）／Cloudflare Pages本番配信／prod環境／事業管理者サーフェス（`06`）／テンプレ・タグ・検索・要約・自動分類
+- ✅ **事業管理者サーフェス Phase A**（別アプリ `apps/admin`。テナント一覧/詳細/利用状況/監査/運営者ロール。詳細は `06`）
+- ⏳ 残り：Phase 4b BYOK／実OpenAI・実Mailgun有効化（secrets）／Cloudflare Pages本番配信（×2）／prod環境／事業管理者 B〜D（代理ログイン・課金・不正検知）／テンプレ・タグ・検索・要約・自動分類
 
 ---
 

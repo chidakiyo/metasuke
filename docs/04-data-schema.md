@@ -14,6 +14,7 @@
 | `0004_outbound.sql` | 返信記録 `record_outbound_message()`（outbound作成＋replied/既読＋'sent'イベントを原子的に） |
 | `0005_invitations.sql` | `invitations` テーブル＋ `accept_invitation(token)`（招待リンク方式） |
 | `0006_ai_entitlements.sql` | `org_entitlements`（組織別の月次AI下書き上限） |
+| `0007_platform_admin.sql` | 事業管理者向け：`platform_admins`（運営者ロール）・`platform_audit_log`（追記専用）・`v_admin_tenant_summary`（横断サマリ）。**いずれも anon/authenticated から不可視・service_role限定** |
 
 ---
 
@@ -37,6 +38,7 @@
 中核（0001）：`organizations` / `memberships` / `inboxes` / `contacts` / `tickets` / `messages` /
 `notes` / `tags` / `ticket_tags` / `templates` / `ai_suggestions` / `events` / `ticket_presence`
 追加：`profiles`（0003） / `invitations`（0005） / `org_entitlements`（0006） ／ ビュー `v_org_members`（0003）
+事業管理者（0007・service_role限定）：`platform_admins` / `platform_audit_log` ／ ビュー `v_admin_tenant_summary`
 
 要点：
 - `tickets.status` は4種（unassigned/open/pending/resolved）、`replied` は内部フラグ。

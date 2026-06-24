@@ -116,11 +116,12 @@
 
 ## 7. 環境・デプロイ（後で詳細化）
 
-- リポジトリ構成: モノレポ（`apps/web` = Vite/React, `supabase/functions/*` = Hono(Edge Functions), `packages/shared` = 型/スキーマ/AI・ジョブのロジック）。
+- リポジトリ構成: モノレポ（`apps/web` = テナントアプリ, `apps/admin` = 事業管理者コンソール, `supabase/functions/*` = Hono(Edge Functions), `packages/shared` = 共有型）。
 - デプロイ: **`supabase` CLI 一本**で完結（`supabase db push` でマイグレーション、`supabase functions deploy` で関数）。コンテナのビルド/レジストリ不要で速い。
 - フロント: 静的ビルドを任意のホスティングへ（将来CDNが要れば Cloudflare Pages 等）。
 - シークレット管理: Supabase secrets（`OPENAI_API_KEY` / `OPENAI_MODEL`、メールSaaSの `MAILGUN_API_KEY`/`MAILGUN_DOMAIN`）。
-- **デプロイ済み Edge Functions**：`api`（/health, /me）・`inbound`（受信webhook）・`send`（返信送信, Mailgun or dry-run）・`draft`（AI下書き, OpenAI or dry-run）。
+- **デプロイ済み Edge Functions**：`api`（/health, /me）・`inbound`（受信webhook）・`send`（返信送信, Mailgun or dry-run）・`draft`（AI下書き, OpenAI or dry-run）・`admin`（事業管理者API・service_role・運営者検証＋監査）。
+- **フロント配信**：Cloudflare Pages を**2サイト**（`apps/web`＝テナント, `apps/admin`＝運営。理想は別ドメイン app./admin.）。CDN/静的のみで Workers 不要。本番は Edge Functions の CORS を実ドメインに制限、admin に Cloudflare Access/IP許可（任意・推奨）。
 - **移植性**: 重い処理が出たら該当エンドポイントだけ Cloud Run へ移せる構造を保つ（将来のエスケープハッチ）。
 
 ❓TODO: ステージング/本番の分離（Supabaseプロジェクトを分ける or ブランチ機能）。
