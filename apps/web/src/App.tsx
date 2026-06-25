@@ -5,6 +5,7 @@ import { supabase } from './lib/supabase';
 import { Auth } from './views/Auth';
 import { Workspace } from './views/Workspace';
 import { MembersView } from './views/Members';
+import { InboxesView } from './views/Inboxes';
 import { ProfileModal } from './views/Profile';
 import { card, h2, input, button } from './styles';
 
@@ -49,7 +50,7 @@ function SignedIn({ session }: { session: Session }) {
   const [orgId, setOrgId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
-  const [view, setView] = useState<'inbox' | 'members'>('inbox');
+  const [view, setView] = useState<'inbox' | 'members' | 'settings'>('inbox');
   const [notice, setNotice] = useState<string | null>(null);
   const [showProfile, setShowProfile] = useState(false);
   const [myName, setMyName] = useState<string | null>(null);
@@ -98,7 +99,7 @@ function SignedIn({ session }: { session: Session }) {
     setBusy(false);
   }
 
-  const navLink = (v: 'inbox' | 'members', label: string) => (
+  const navLink = (v: 'inbox' | 'members' | 'settings', label: string) => (
     <button
       onClick={() => setView(v)}
       style={{
@@ -164,8 +165,15 @@ function SignedIn({ session }: { session: Session }) {
           <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid #e3e3e3', marginBottom: 16 }}>
             {navLink('inbox', '受信箱')}
             {navLink('members', 'メンバー')}
+            {navLink('settings', '受信箱設定')}
           </div>
-          {view === 'inbox' ? <Workspace orgId={orgId} /> : <MembersView orgId={orgId} currentUid={session.user.id} />}
+          {view === 'inbox' ? (
+            <Workspace orgId={orgId} />
+          ) : view === 'members' ? (
+            <MembersView orgId={orgId} currentUid={session.user.id} />
+          ) : (
+            <InboxesView orgId={orgId} currentUid={session.user.id} />
+          )}
         </>
       ) : null}
     </>
