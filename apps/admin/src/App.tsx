@@ -17,7 +17,19 @@ interface TenantDetail {
   tenant: TenantSummary; members: Member[]; inboxes: Inbox[];
   usage: { inboundThisMonth: number; outboundThisMonth: number; aiDraftsThisMonth: number };
 }
-interface AuditEvent { actor_id: string | null; action: string; target_org_id: string | null; reason: string | null; created_at: string }
+interface AuditEvent { action: string; reason: string | null; payload: { ticket_id?: string } | null; created_at: string; actor: string | null; org_name: string | null }
+
+const ACTION_LABELS: Record<string, string> = {
+  'tenant.view': 'テナント閲覧',
+  'impersonate.start': '代理開始',
+  'impersonate.view_ticket': '代理: スレッド閲覧',
+  'impersonate.end': '代理終了',
+};
+function actionLabel(a: string): string { return ACTION_LABELS[a] ?? a; }
+function auditDetail(e: AuditEvent): string {
+  if (e.action === 'impersonate.view_ticket' && e.payload?.ticket_id) return `ticket ${e.payload.ticket_id.slice(0, 8)}…`;
+  return e.reason ?? '';
+}
 
 export function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -209,14 +221,15 @@ function AuditView() {
       <h2 style={h2}>監査ログ</h2>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead><tr style={{ color: '#94a3b8', textAlign: 'left' }}>
-          <th style={th}>日時</th><th style={th}>操作</th><th style={th}>対象org</th><th style={th}>実行者</th>
+          <th style={th}>日時</th><th style={th}>操作</th><th style={th}>対象テナント</th><th style={th}>実行者</th><th style={th}>詳細</th>
         </tr></thead>
         <tbody>{events.map((e, i) => (
           <tr key={i} style={{ borderTop: '1px solid #1e293b' }}>
             <td style={td}>{new Date(e.created_at).toLocaleString()}</td>
-            <td style={td}>{e.action}</td>
-            <td style={td}>{e.target_org_id?.slice(0, 8) ?? '—'}</td>
-            <td style={td}>{e.actor_id?.slice(0, 8) ?? '—'}</td>
+            <td style={{ ...td, color: e.action.startsWith('impersonate') ? '#fbbf24' : '#e2e8f0' }}>{actionLabel(e.action)}</td>
+            <td style={td}>{e.org_name ?? '—'}</td>
+            <td style={td}>{e.actor ?? '—'}</td>
+            <td style={{ ...td, color: '#94a3b8' }}>{auditDetail(e)}</td>
           </tr>
         ))}</tbody>
       </table>

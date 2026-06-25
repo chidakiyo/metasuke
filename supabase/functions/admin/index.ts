@@ -110,14 +110,34 @@ app.get('/tenants/:id', async (c) => {
   });
 });
 
-// 監査ログ
+// 監査ログ（actor/orgを名前に解決して返す。解決は in(...) のバッチで N+1 回避）
 app.get('/audit', async (c) => {
   const ctx = await authPlatformAdmin(c.req.header('Authorization'));
   if (!ctx) return c.json({ error: 'forbidden' }, 403);
   const limit = Math.min(Number(c.req.query('limit') ?? 50), 200);
-  const { data } = await ctx.db.from('platform_audit_log')
-    .select('actor_id,action,target_org_id,reason,created_at').order('created_at', { ascending: false }).limit(limit);
-  return c.json({ events: data ?? [] });
+  const { data: events } = await ctx.db.from('platform_audit_log')
+    .select('actor_id,action,target_org_id,reason,payload,created_at')
+    .order('created_at', { ascending: false }).limit(limit);
+  const rows = events ?? [];
+
+  const actorIds = [...new Set(rows.map((e) => e.actor_id).filter(Boolean))] as string[];
+  const orgIds = [...new Set(rows.map((e) => e.target_org_id).filter(Boolean))] as string[];
+  const [profRes, orgRes] = await Promise.all([
+    actorIds.length ? ctx.db.from('profiles').select('user_id,email,display_name').in('user_id', actorIds) : Promise.resolve({ data: [] }),
+    orgIds.length ? ctx.db.from('organizations').select('id,name').in('id', orgIds) : Promise.resolve({ data: [] }),
+  ]);
+  const pmap = new Map((profRes.data ?? []).map((p: { user_id: string; email: string | null; display_name: string | null }) => [p.user_id, p.display_name || p.email || '']));
+  const omap = new Map((orgRes.data ?? []).map((o: { id: string; name: string }) => [o.id, o.name]));
+
+  const enriched = rows.map((e) => ({
+    action: e.action,
+    reason: e.reason,
+    payload: e.payload,
+    created_at: e.created_at,
+    actor: e.actor_id ? (pmap.get(e.actor_id) ?? `${(e.actor_id as string).slice(0, 8)}…`) : null,
+    org_name: e.target_org_id ? (omap.get(e.target_org_id) ?? `${(e.target_org_id as string).slice(0, 8)}…`) : null,
+  }));
+  return c.json({ events: enriched });
 });
 
 // ===== 代理ログイン（impersonation・読み取り専用） =====
