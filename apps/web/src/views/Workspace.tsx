@@ -4,6 +4,7 @@ import type { Inbox, Message, TicketStatus } from '@metasuke/shared';
 import { TICKET_STATUSES, TICKET_STATUS_LABELS } from '@metasuke/shared';
 import { supabase } from '../lib/supabase';
 import { card, h2, input, button, buttonGhost, statusBadge } from '../styles';
+import { MessageBody } from './MessageBody';
 
 const FUNCTIONS_URL = import.meta.env.VITE_FUNCTIONS_URL ?? 'http://127.0.0.1:54321/functions/v1';
 
@@ -516,7 +517,7 @@ function TicketDetail({
                 <span>{new Date(m.created_at).toLocaleString()}</span>
               </div>
               {m.subject && <div style={{ fontSize: 13, fontWeight: 600, margin: '4px 0' }}>{m.subject}</div>}
-              <div style={{ fontSize: 14, whiteSpace: 'pre-wrap' }}>{m.body_text}</div>
+              <MessageBody bodyHtml={m.body_html} bodyText={m.body_text} />
             </div>
           ))}
         </div>
