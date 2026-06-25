@@ -20,3 +20,18 @@ export async function adminApi<T = unknown>(path: string): Promise<T> {
   }
   return res.json() as Promise<T>;
 }
+
+export async function adminApiPost<T = unknown>(path: string, body?: unknown): Promise<T> {
+  const { data: sess } = await supabase.auth.getSession();
+  const token = sess.session?.access_token ?? '';
+  const res = await fetch(`${FUNCTIONS_URL}/admin${path}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const b = await res.json().catch(() => ({}));
+    throw new Error((b as { error?: string }).error ?? `HTTP ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}

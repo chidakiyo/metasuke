@@ -1,6 +1,11 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { supabase, adminApi } from './lib/supabase';
+import { supabase, adminApi, adminApiPost } from './lib/supabase';
+
+interface ImperSession { id: string; target_org_id: string; reason: string; expires_at: string }
+interface Imper { session: ImperSession; org_name: string }
+interface ImperTicket { id: string; subject: string | null; status: string; is_read: boolean; last_message_at: string | null; contact: { name: string | null; email: string } | null }
+interface ImperMessage { id: string; direction: string; from_addr: string | null; subject: string | null; body_text: string | null; created_at: string }
 
 interface TenantSummary {
   id: string; name: string; plan: string; ai_enabled: boolean; created_at: string;
@@ -77,6 +82,16 @@ function Forbidden({ email }: { email: string }) {
 function Console({ role, email }: { role: string; email: string }) {
   const [tab, setTab] = useState<'tenants' | 'audit'>('tenants');
   const [selected, setSelected] = useState<string | null>(null);
+  const [imper, setImper] = useState<Imper | null>(null);
+
+  // 代理セッションの復元（リロードしてもバナーを維持）
+  useEffect(() => {
+    adminApi<{ session: ImperSession | null; org_name: string | null }>('/impersonate/active')
+      .then((r) => { if (r.session) setImper({ session: r.session, org_name: r.org_name ?? '' }); })
+      .catch(() => {});
+  }, []);
+
+  if (imper) return <ImpersonationView imper={imper} onEnd={() => setImper(null)} />;
 
   return (
     <>
@@ -89,7 +104,7 @@ function Console({ role, email }: { role: string; email: string }) {
         <Tab active={tab === 'audit'} onClick={() => { setTab('audit'); setSelected(null); }}>監査ログ</Tab>
       </div>
       {tab === 'audit' ? <AuditView />
-        : selected ? <TenantDetailView id={selected} onBack={() => setSelected(null)} />
+        : selected ? <TenantDetailView id={selected} onBack={() => setSelected(null)} onImpersonate={setImper} />
         : <TenantsView onSelect={setSelected} />}
     </>
   );
@@ -139,19 +154,31 @@ function TenantsView({ onSelect }: { onSelect: (id: string) => void }) {
   );
 }
 
-function TenantDetailView({ id, onBack }: { id: string; onBack: () => void }) {
+function TenantDetailView({ id, onBack, onImpersonate }: { id: string; onBack: () => void; onImpersonate: (i: Imper) => void }) {
   const [d, setD] = useState<TenantDetail | null>(null);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => {
     adminApi<TenantDetail>(`/tenants/${id}`).then(setD).catch((e) => setErr(String(e)));
   }, [id]);
 
+  async function startImpersonation() {
+    const reason = window.prompt('代理閲覧の理由を入力してください（必須・監査ログに記録されます）');
+    if (!reason || !reason.trim()) return;
+    try {
+      const r = await adminApiPost<{ session: ImperSession; org_name: string }>('/impersonate', { org_id: id, reason: reason.trim() });
+      onImpersonate({ session: r.session, org_name: r.org_name });
+    } catch (e) { alert(String(e)); }
+  }
+
   if (err) return <section style={card}><button style={buttonGhost} onClick={onBack}>← 戻る</button><p style={{ color: '#f87171' }}>{err}</p></section>;
   if (!d) return <section style={card}>読み込み中…</section>;
 
   return (
     <section style={card}>
-      <button style={buttonGhost} onClick={onBack}>← 一覧へ戻る</button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <button style={buttonGhost} onClick={onBack}>← 一覧へ戻る</button>
+        <button style={{ ...buttonGhost, borderColor: '#f59e0b', color: '#f59e0b' }} onClick={startImpersonation}>🔍 代理閲覧（読み取り専用）</button>
+      </div>
       <h2 style={{ ...h2, marginTop: 12 }}>{d.tenant.name}</h2>
       <p style={{ color: '#94a3b8', fontSize: 13 }}>
         プラン: {d.tenant.plan}・AI: {d.tenant.ai_enabled ? 'ON' : 'OFF'}・作成: {new Date(d.tenant.created_at).toLocaleString()}
@@ -195,6 +222,75 @@ function AuditView() {
       </table>
       {events.length === 0 && <p style={{ color: '#64748b' }}>まだ記録がありません。</p>}
     </section>
+  );
+}
+
+function ImpersonationView({ imper, onEnd }: { imper: Imper; onEnd: () => void }) {
+  const { session, org_name } = imper;
+  const [tickets, setTickets] = useState<ImperTicket[]>([]);
+  const [sel, setSel] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ImperMessage[]>([]);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    adminApi<{ tickets: ImperTicket[] }>(`/impersonate/${session.id}/tickets`)
+      .then((r) => setTickets(r.tickets)).catch((e) => setErr(String(e)));
+  }, [session.id]);
+
+  useEffect(() => {
+    if (!sel) { setMessages([]); return; }
+    adminApi<{ messages: ImperMessage[] }>(`/impersonate/${session.id}/tickets/${sel}`)
+      .then((r) => setMessages(r.messages)).catch((e) => setErr(String(e)));
+  }, [sel, session.id]);
+
+  async function end() {
+    try { await adminApiPost(`/impersonate/${session.id}/end`); } catch { /* noop */ }
+    onEnd();
+  }
+
+  return (
+    <>
+      {/* 常時バナー */}
+      <div style={{ background: '#7c2d12', border: '1px solid #f59e0b', borderRadius: 8, padding: '10px 14px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+        <div style={{ fontSize: 13 }}>
+          ⚠ <b>サポートとして「{org_name}」を代理閲覧中（読み取り専用）</b><br />
+          <span style={{ color: '#fed7aa' }}>理由: {session.reason} ・ 期限: {new Date(session.expires_at).toLocaleTimeString()}</span>
+        </div>
+        <button style={{ ...buttonGhost, borderColor: '#fbbf24', color: '#fde68a' }} onClick={end}>代理を終了</button>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 16, alignItems: 'start' }}>
+        <section style={card}>
+          <h3 style={{ ...h3, marginTop: 0 }}>チケット（{tickets.length}）</h3>
+          {err && <p style={{ color: '#f87171', fontSize: 12 }}>{err}</p>}
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            {tickets.map((t) => (
+              <li key={t.id} onClick={() => setSel(t.id)} style={{ padding: '8px 6px', borderTop: '1px solid #1e293b', cursor: 'pointer', background: sel === t.id ? '#0f172a' : 'transparent' }}>
+                <div style={{ fontSize: 13 }}>{t.contact?.name ?? t.contact?.email ?? '不明'}</div>
+                <div style={{ fontSize: 12, color: '#94a3b8' }}>{t.subject ?? '(件名なし)'} ・ {t.status}</div>
+              </li>
+            ))}
+          </ul>
+        </section>
+        <section style={card}>
+          <h3 style={{ ...h3, marginTop: 0 }}>スレッド（読み取り専用）</h3>
+          {!sel ? <p style={{ color: '#64748b' }}>左のチケットを選択してください。</p>
+            : messages.length === 0 ? <p style={{ color: '#64748b' }}>メッセージがありません。</p>
+            : <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {messages.map((m) => (
+                  <div key={m.id} style={{ border: '1px solid #334155', borderRadius: 8, padding: 10, background: m.direction === 'inbound' ? '#0f172a' : '#1e293b' }}>
+                    <div style={{ fontSize: 12, color: '#94a3b8', display: 'flex', justifyContent: 'space-between' }}>
+                      <span>{m.direction === 'inbound' ? '受信' : '送信'} · {m.from_addr}</span>
+                      <span>{new Date(m.created_at).toLocaleString()}</span>
+                    </div>
+                    {m.subject && <div style={{ fontSize: 13, fontWeight: 600, margin: '4px 0' }}>{m.subject}</div>}
+                    <div style={{ fontSize: 14, whiteSpace: 'pre-wrap' }}>{m.body_text}</div>
+                  </div>
+                ))}
+              </div>}
+        </section>
+      </div>
+    </>
   );
 }
 
