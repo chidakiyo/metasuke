@@ -57,6 +57,8 @@ docs/            設計ドキュメント（下の索引参照）
 - **送信**：MailgunがMTA。From は `inboxes.from_domain`＋`dkim_verified` で分岐（認証済→テナントドメインでブランド送信／未→metasukeドメイン。SPF/DKIMはTXTでMX非干渉）。Reply-Toに ticketトークンでスレッド連結を堅牢化（実装は送信有効化時）。
 - **開発受信**：自分の(サブ)ドメインをMXでMailgunへ＋`match_recipient`1本＝本番案Aと同一構成。外部MUA不要で直接送信テスト可。
 - **送信は人間承認**（AI下書きは挿入のみ・自動送信しない）。
+- **受信HTMLメールは信頼できない入力**として安全表示（`apps/web/.../MessageBody.tsx`）：①DOMPurifyでサニタイズ→②`sandbox="allow-scripts"`（same-originなし＝オペークorigin）iframeで隔離→③nonce付きCSPで自前の高さ計測のみ許可・外部リソース遮断→④外部画像は既定ブロック（「画像を表示」トグル・トラッキング防止）→⑤HTML無ければテキストにフォールバック。`dangerouslySetInnerHTML` は使わない。
+- **受信箱(inboxes)はテナント管理者がアプリで管理**（「受信箱設定」画面・RLS `is_org_admin`・service_role不要）。履歴(tickets)がFK参照するため**物理削除不可→運用停止(`archived_at` / 0010)**で畳む（受信は停止後もマッチ＝取りこぼし防止）。
 - 監査トリガ `log_ticket_changes`（status/assign→events）、運営は `platform_audit_log`（追記専用）。
 
 ## マイグレーション/関数の追加手順
