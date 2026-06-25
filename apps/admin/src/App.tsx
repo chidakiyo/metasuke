@@ -95,6 +95,7 @@ function Console({ role, email }: { role: string; email: string }) {
   const [tab, setTab] = useState<'tenants' | 'audit'>('tenants');
   const [selected, setSelected] = useState<string | null>(null);
   const [imper, setImper] = useState<Imper | null>(null);
+  const [showProfile, setShowProfile] = useState(false);
 
   // 代理セッションの復元（リロードしてもバナーを維持）
   useEffect(() => {
@@ -109,8 +110,12 @@ function Console({ role, email }: { role: string; email: string }) {
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <span style={{ fontSize: 13, color: '#94a3b8' }}>{email}・権限: <b style={{ color: '#e2e8f0' }}>{role}</b></span>
-        <button style={buttonGhost} onClick={() => supabase.auth.signOut()}>ログアウト</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button style={buttonGhost} onClick={() => setShowProfile(true)}>プロフィール</button>
+          <button style={buttonGhost} onClick={() => supabase.auth.signOut()}>ログアウト</button>
+        </div>
       </div>
+      {showProfile && <ProfileModalAdmin email={email} onClose={() => setShowProfile(false)} />}
       <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid #334155', marginBottom: 16 }}>
         <Tab active={tab === 'tenants'} onClick={() => { setTab('tenants'); setSelected(null); }}>テナント</Tab>
         <Tab active={tab === 'audit'} onClick={() => { setTab('audit'); setSelected(null); }}>監査ログ</Tab>
@@ -307,6 +312,72 @@ function ImpersonationView({ imper, onEnd }: { imper: Imper; onEnd: () => void }
   );
 }
 
+function ProfileModalAdmin({ email, onClose }: { email: string; onClose: () => void }) {
+  const [uid, setUid] = useState<string | null>(null);
+  const [name, setName] = useState('');
+  const [newEmail, setNewEmail] = useState(email);
+  const [pw, setPw] = useState('');
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(async ({ data }) => {
+      const id = data.user?.id ?? null;
+      setUid(id);
+      if (id) {
+        const { data: p } = await supabase.from('profiles').select('display_name').eq('user_id', id).maybeSingle();
+        setName((p?.display_name as string | null) ?? '');
+      }
+    });
+  }, []);
+
+  async function saveName() {
+    if (!uid) return;
+    setBusy(true); setMsg(null);
+    const { error } = await supabase.from('profiles').update({ display_name: name.trim() || null }).eq('user_id', uid);
+    setMsg(error ? `エラー: ${error.message}` : '名前を保存しました。'); setBusy(false);
+  }
+  async function changeEmail() {
+    setBusy(true); setMsg(null);
+    const { error } = await supabase.auth.updateUser({ email: newEmail.trim() });
+    setMsg(error ? `エラー: ${error.message}` : '確認メールを送信しました。新しいアドレスのリンクで確定します。'); setBusy(false);
+  }
+  async function changePassword() {
+    if (pw.length < 6) { setMsg('パスワードは6文字以上にしてください。'); return; }
+    setBusy(true); setMsg(null);
+    const { error } = await supabase.auth.updateUser({ password: pw });
+    setMsg(error ? `エラー: ${error.message}` : 'パスワードを変更しました。'); setPw(''); setBusy(false);
+  }
+
+  return (
+    <div style={overlay} onClick={onClose}>
+      <div style={{ ...card, maxWidth: 460, width: '100%', marginBottom: 0 }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 style={h2}>プロフィール</h2>
+          <button style={buttonGhost} onClick={onClose}>閉じる</button>
+        </div>
+        <h3 style={h3}>名前</h3>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input style={{ ...input, marginBottom: 0 }} placeholder="表示名" value={name} onChange={(e) => setName(e.target.value)} />
+          <button style={button} disabled={busy} onClick={saveName}>保存</button>
+        </div>
+        <h3 style={h3}>メールアドレス</h3>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input style={{ ...input, marginBottom: 0 }} value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
+          <button style={button} disabled={busy || !newEmail.trim() || newEmail.trim() === email} onClick={changeEmail}>変更</button>
+        </div>
+        <p style={{ fontSize: 11, color: '#64748b', margin: '4px 0 0' }}>※ 変更には新しいアドレスでの確認が必要です。</p>
+        <h3 style={h3}>パスワード</h3>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input style={{ ...input, marginBottom: 0 }} type="password" placeholder="新しいパスワード（6文字以上）" value={pw} onChange={(e) => setPw(e.target.value)} />
+          <button style={button} disabled={busy || !pw} onClick={changePassword}>変更</button>
+        </div>
+        {msg && <p style={{ fontSize: 13, color: msg.startsWith('エラー') ? '#f87171' : '#34d399', marginTop: 12 }}>{msg}</p>}
+      </div>
+    </div>
+  );
+}
+
 function Tab({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return <button onClick={onClick} style={{ padding: '6px 12px', border: 'none', background: 'transparent', cursor: 'pointer',
     color: active ? '#60a5fa' : '#94a3b8', borderBottom: active ? '2px solid #60a5fa' : '2px solid transparent', fontWeight: active ? 700 : 400 }}>{children}</button>;
@@ -324,6 +395,7 @@ const h3: CSSProperties = { fontSize: 13, color: '#94a3b8', marginTop: 18, margi
 const input: CSSProperties = { display: 'block', width: '100%', padding: '8px 10px', marginBottom: 8, border: '1px solid #334155', borderRadius: 6, boxSizing: 'border-box', background: '#0f172a', color: '#e2e8f0' };
 const button: CSSProperties = { padding: '8px 14px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' };
 const buttonGhost: CSSProperties = { padding: '6px 12px', background: 'transparent', color: '#60a5fa', border: '1px solid #3b82f6', borderRadius: 6, cursor: 'pointer' };
+const overlay: CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 80, zIndex: 100 };
 const th: CSSProperties = { padding: '6px 8px', fontWeight: 600 };
 const td: CSSProperties = { padding: '6px 8px' };
 const ul: CSSProperties = { margin: '4px 0', paddingLeft: 18, fontSize: 13 };

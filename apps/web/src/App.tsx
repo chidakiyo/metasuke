@@ -5,6 +5,7 @@ import { supabase } from './lib/supabase';
 import { Auth } from './views/Auth';
 import { Workspace } from './views/Workspace';
 import { MembersView } from './views/Members';
+import { ProfileModal } from './views/Profile';
 import { card, h2, input, button } from './styles';
 
 const inviteToken = new URLSearchParams(window.location.search).get('invite');
@@ -50,6 +51,7 @@ function SignedIn({ session }: { session: Session }) {
   const [busy, setBusy] = useState(false);
   const [view, setView] = useState<'inbox' | 'members'>('inbox');
   const [notice, setNotice] = useState<string | null>(null);
+  const [showProfile, setShowProfile] = useState(false);
 
   async function loadOrgs(): Promise<Organization[]> {
     const { data } = await supabase.from('organizations').select('*').order('created_at');
@@ -122,10 +124,16 @@ function SignedIn({ session }: { session: Session }) {
           )}
           <span style={{ color: '#999', fontSize: 13 }}>{session.user.email}</span>
         </div>
-        <button style={{ ...button, background: '#fff', color: '#333', border: '1px solid #ccc' }} onClick={() => supabase.auth.signOut()}>
-          ログアウト
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button style={{ ...button, background: '#fff', color: '#333', border: '1px solid #ccc' }} onClick={() => setShowProfile(true)}>
+            プロフィール
+          </button>
+          <button style={{ ...button, background: '#fff', color: '#333', border: '1px solid #ccc' }} onClick={() => supabase.auth.signOut()}>
+            ログアウト
+          </button>
+        </div>
       </div>
+      {showProfile && <ProfileModal email={session.user.email ?? ''} onClose={() => setShowProfile(false)} />}
 
       {notice && (
         <div style={{ ...card, background: '#f0fdf4', color: '#166534' }}>
