@@ -18,6 +18,7 @@
 | `0008_impersonation.sql` | `impersonation_sessions`（代理ログイン・読み取り専用・30分期限。service_role限定） |
 | `0009_sync_profile_email.sql` | `auth.users` のメール変更を `profiles.email` へ同期するトリガ |
 | `0010_inbox_archive.sql` | `inboxes.archived_at`（受信箱の運用停止＝アーカイブ。履歴FKで物理削除不可のため停止運用。アクティブ部分インデックス付き） |
+| `0011_reply_token.sql` | `tickets.reply_token`（不変・一意）＋ `ingest_inbound_email` をサブアドレス(+tag)対応に更新。Reply-To `localpart+t-<token>@domain` で受信し、トークンでチケットへ堅牢連結（ヘッダー欠落・改変に耐性） |
 
 ---
 

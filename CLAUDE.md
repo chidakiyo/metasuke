@@ -54,7 +54,7 @@ docs/            設計ドキュメント（下の索引参照）
 - **AIもメールも「キー未設定なら dry-run」**で動く（OPENAI/MAILGUN secrets を入れると実動作に切替）。
 - **受信(inbound)はMailgun本番形式(multipart/form-data＋署名検証)と開発用JSONの両対応**。マルチテナント振り分けは「recipientアドレス→inbox→org」を `ingest_inbound_email` が解決（Mailgunはテナントを知らない／振り分けはアプリ側・宛先アドレスで判別）。
 - **メール接続方式（競合準拠・docs/02 §4）**：テナント単位の設定で持つ。優先＝**①転送(Forwarding, universal・採用済み) → ②OAuth Gmail/M365(大手本命・後) → ③IMAP/POP(自前向け・最後)**。Gmail/M365は基本認証廃止でOAuth必須、IMAP/POPパスワードは使えない。**Routeやドメインはテナント追加で増やさない**（catch_all回避・`match_recipient`でドメイン限定）。
-- **送信**：MailgunがMTA。From は `inboxes.from_domain`＋`dkim_verified` で分岐（認証済→テナントドメインでブランド送信／未→metasukeドメイン。SPF/DKIMはTXTでMX非干渉）。Reply-Toに ticketトークンでスレッド連結を堅牢化（実装は送信有効化時）。
+- **送信**：MailgunがMTA。From は `inboxes.from_domain`＋`dkim_verified` で分岐（認証済→そのテナント検証済みドメインでブランド送信／未→共有ドメイン `MAILGUN_SHARED_DOMAIN`(無ければ`MAILGUN_DOMAIN`)＋Reply-Toで窓口誘導。SPF/DKIMはTXTでMX非干渉）。**Reply-Toは常に `localpart+t-<token>@domain`（実装済み・0011）**で、返信は宛先トークンから確実に同チケットへ連結（ヘッダー欠落・改変に耐性）。MAILGUN_API_KEY 未設定なら dry-run。
 - **開発受信**：自分の(サブ)ドメインをMXでMailgunへ＋`match_recipient`1本＝本番案Aと同一構成。外部MUA不要で直接送信テスト可。
 - **送信は人間承認**（AI下書きは挿入のみ・自動送信しない）。
 - **受信HTMLメールは信頼できない入力**として安全表示（`apps/web/.../MessageBody.tsx`）：①DOMPurifyでサニタイズ→②`sandbox="allow-scripts"`（same-originなし＝オペークorigin）iframeで隔離→③nonce付きCSPで自前の高さ計測のみ許可・外部リソース遮断→④外部画像は既定ブロック（「画像を表示」トグル・トラッキング防止）→⑤HTML無ければテキストにフォールバック。`dangerouslySetInnerHTML` は使わない。
