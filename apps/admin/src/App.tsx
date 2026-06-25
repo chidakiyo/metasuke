@@ -315,9 +315,11 @@ function ImpersonationView({ imper, onEnd }: { imper: Imper; onEnd: () => void }
 function ProfileModalAdmin({ email, onClose }: { email: string; onClose: () => void }) {
   const [uid, setUid] = useState<string | null>(null);
   const [name, setName] = useState('');
+  const [emailEditing, setEmailEditing] = useState(false);
   const [newEmail, setNewEmail] = useState(email);
   const [pw, setPw] = useState('');
-  const [msg, setMsg] = useState<string | null>(null);
+  const [pw2, setPw2] = useState('');
+  const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -331,52 +333,76 @@ function ProfileModalAdmin({ email, onClose }: { email: string; onClose: () => v
     });
   }, []);
 
-  async function saveName() {
+  async function saveProfile() {
     if (!uid) return;
     setBusy(true); setMsg(null);
     const { error } = await supabase.from('profiles').update({ display_name: name.trim() || null }).eq('user_id', uid);
-    setMsg(error ? `エラー: ${error.message}` : '名前を保存しました。'); setBusy(false);
-  }
-  async function changeEmail() {
-    setBusy(true); setMsg(null);
-    const { error } = await supabase.auth.updateUser({ email: newEmail.trim() });
-    setMsg(error ? `エラー: ${error.message}` : '確認メールを送信しました。新しいアドレスのリンクで確定します。'); setBusy(false);
+    if (error) { setMsg({ kind: 'err', text: error.message }); setBusy(false); return; }
+    if (emailEditing && newEmail.trim() && newEmail.trim() !== email) {
+      const { error: e2 } = await supabase.auth.updateUser({ email: newEmail.trim() });
+      if (e2) { setMsg({ kind: 'err', text: e2.message }); setBusy(false); return; }
+      setMsg({ kind: 'ok', text: 'プロフィールを保存しました。メール変更は確認メールのリンクで確定します。' });
+    } else {
+      setMsg({ kind: 'ok', text: 'プロフィールを保存しました。' });
+    }
+    setBusy(false);
   }
   async function changePassword() {
-    if (pw.length < 6) { setMsg('パスワードは6文字以上にしてください。'); return; }
+    if (pw.length < 6) { setMsg({ kind: 'err', text: 'パスワードは6文字以上にしてください。' }); return; }
+    if (pw !== pw2) { setMsg({ kind: 'err', text: '確認用パスワードが一致しません。' }); return; }
     setBusy(true); setMsg(null);
     const { error } = await supabase.auth.updateUser({ password: pw });
-    setMsg(error ? `エラー: ${error.message}` : 'パスワードを変更しました。'); setPw(''); setBusy(false);
+    setMsg(error ? { kind: 'err', text: error.message } : { kind: 'ok', text: 'パスワードを変更しました。' });
+    setPw(''); setPw2(''); setBusy(false);
   }
 
   return (
-    <div style={overlay} onClick={onClose}>
-      <div style={{ ...card, maxWidth: 460, width: '100%', marginBottom: 0 }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={h2}>プロフィール</h2>
-          <button style={buttonGhost} onClick={onClose}>閉じる</button>
+    <div style={pa.overlay} onClick={onClose}>
+      <div style={pa.modal} onClick={(e) => e.stopPropagation()}>
+        <div style={pa.headerRow}>
+          <strong style={{ fontSize: 18 }}>アカウント設定</strong>
+          <button style={pa.close} onClick={onClose}>閉じる</button>
         </div>
-        <h3 style={h3}>名前</h3>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input style={{ ...input, marginBottom: 0 }} placeholder="表示名" value={name} onChange={(e) => setName(e.target.value)} />
-          <button style={button} disabled={busy} onClick={saveName}>保存</button>
+        <div style={pa.section}>プロフィール</div>
+        <label style={pa.label}>表示名</label>
+        <input style={pa.input} placeholder="表示名" value={name} onChange={(e) => setName(e.target.value)} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <label style={pa.label}>メール（ログイン用）</label>
+          {!emailEditing && <button style={pa.linkBtn} onClick={() => setEmailEditing(true)}>変更</button>}
         </div>
-        <h3 style={h3}>メールアドレス</h3>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input style={{ ...input, marginBottom: 0 }} value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
-          <button style={button} disabled={busy || !newEmail.trim() || newEmail.trim() === email} onClick={changeEmail}>変更</button>
-        </div>
-        <p style={{ fontSize: 11, color: '#64748b', margin: '4px 0 0' }}>※ 変更には新しいアドレスでの確認が必要です。</p>
-        <h3 style={h3}>パスワード</h3>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input style={{ ...input, marginBottom: 0 }} type="password" placeholder="新しいパスワード（6文字以上）" value={pw} onChange={(e) => setPw(e.target.value)} />
-          <button style={button} disabled={busy || !pw} onClick={changePassword}>変更</button>
-        </div>
-        {msg && <p style={{ fontSize: 13, color: msg.startsWith('エラー') ? '#f87171' : '#34d399', marginTop: 12 }}>{msg}</p>}
+        <input style={emailEditing ? pa.input : pa.inputRO} value={newEmail} readOnly={!emailEditing} onChange={(e) => setNewEmail(e.target.value)} />
+        {emailEditing && <p style={pa.hint}>※ 変更すると新しいアドレスに確認メールが届きます。</p>}
+        <button style={pa.primary} disabled={busy} onClick={saveProfile}>プロフィールを保存</button>
+
+        <div style={pa.divider} />
+
+        <div style={pa.section}>パスワード変更</div>
+        <label style={pa.label}>新しいパスワード</label>
+        <input style={pa.input} type="password" value={pw} onChange={(e) => setPw(e.target.value)} />
+        <label style={pa.label}>新しいパスワード（確認）</label>
+        <input style={pa.input} type="password" value={pw2} onChange={(e) => setPw2(e.target.value)} />
+        <button style={pa.primary} disabled={busy || !pw} onClick={changePassword}>パスワードを変更</button>
+
+        {msg && <p style={{ fontSize: 13, marginTop: 12, color: msg.kind === 'err' ? '#dc2626' : '#16a34a' }}>{msg.text}</p>}
       </div>
     </div>
   );
 }
+
+const pa: Record<string, CSSProperties> = {
+  overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 64, zIndex: 200 },
+  modal: { background: '#fff', color: '#0f172a', borderRadius: 12, padding: 24, width: '100%', maxWidth: 460, boxShadow: '0 10px 40px rgba(0,0,0,0.4)', maxHeight: '85vh', overflowY: 'auto' },
+  headerRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  close: { background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 14 },
+  section: { fontSize: 15, fontWeight: 700, margin: '8px 0 12px' },
+  label: { display: 'block', fontSize: 12, color: '#64748b', margin: '10px 0 4px' },
+  input: { display: 'block', width: '100%', padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: 8, boxSizing: 'border-box', fontSize: 14, background: '#fff', color: '#0f172a' },
+  inputRO: { display: 'block', width: '100%', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: 8, boxSizing: 'border-box', fontSize: 14, background: '#f1f5f9', color: '#475569' },
+  linkBtn: { background: 'transparent', border: 'none', color: '#2563eb', cursor: 'pointer', fontSize: 12 },
+  hint: { fontSize: 11, color: '#94a3b8', margin: '4px 0 0' },
+  primary: { marginTop: 14, padding: '10px 16px', background: '#1e293b', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14 },
+  divider: { borderTop: '1px solid #e5e7eb', margin: '24px 0' },
+};
 
 function Tab({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return <button onClick={onClick} style={{ padding: '6px 12px', border: 'none', background: 'transparent', cursor: 'pointer',
@@ -395,7 +421,6 @@ const h3: CSSProperties = { fontSize: 13, color: '#94a3b8', marginTop: 18, margi
 const input: CSSProperties = { display: 'block', width: '100%', padding: '8px 10px', marginBottom: 8, border: '1px solid #334155', borderRadius: 6, boxSizing: 'border-box', background: '#0f172a', color: '#e2e8f0' };
 const button: CSSProperties = { padding: '8px 14px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' };
 const buttonGhost: CSSProperties = { padding: '6px 12px', background: 'transparent', color: '#60a5fa', border: '1px solid #3b82f6', borderRadius: 6, cursor: 'pointer' };
-const overlay: CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 80, zIndex: 100 };
 const th: CSSProperties = { padding: '6px 8px', fontWeight: 600 };
 const td: CSSProperties = { padding: '6px 8px' };
 const ul: CSSProperties = { margin: '4px 0', paddingLeft: 18, fontSize: 13 };

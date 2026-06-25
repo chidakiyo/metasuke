@@ -9,7 +9,6 @@ export const card: CSSProperties = {
   background: '#fff',
 };
 export const h2: CSSProperties = { fontSize: 16, marginTop: 0 };
-export const h3: CSSProperties = { fontSize: 13, color: '#555', marginTop: 16, marginBottom: 6 };
 export const input: CSSProperties = {
   display: 'block',
   width: '100%',
@@ -41,17 +40,6 @@ export const statusColor: Record<TicketStatus, string> = {
   open: '#2563eb',
   pending: '#d97706',
   resolved: '#16a34a',
-};
-
-export const overlay: CSSProperties = {
-  position: 'fixed',
-  inset: 0,
-  background: 'rgba(0,0,0,0.4)',
-  display: 'flex',
-  alignItems: 'flex-start',
-  justifyContent: 'center',
-  paddingTop: 80,
-  zIndex: 100,
 };
 
 export function statusBadge(status: TicketStatus): CSSProperties {
