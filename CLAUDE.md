@@ -75,8 +75,8 @@ docs/            設計ドキュメント（下の索引参照）
 
 ## 進捗（要約）
 - ✅ テナント Phase 0〜4a（受信→対応→二重対応防止→AI下書き）＋メンバー招待
-- ✅ 事業管理者 Phase A（テナント一覧/詳細/利用状況/監査/運営者ロール）
-- ⏳ 実OpenAI/実Mailgun有効化、Cloudflare Pages配信、prod環境、BYOK(4b)、運営Phase B〜D、Phase5機能群
+- ✅ 事業管理者 Phase A（テナント一覧/詳細/利用状況/監査/運営者ロール）＋ Phase B（代理ログイン・読み取り専用・理由必須・期限・監査）
+- ⏳ 実OpenAI/実Mailgun有効化、Cloudflare Pages配信、prod環境、BYOK(4b)、運営Phase C〜D、Phase5機能群
 
 ## メンテナンス方針
 - **機能追加・構成変更・運用知見が出たらこの CLAUDE.md と該当 `docs/` を更新**してからコミットする。

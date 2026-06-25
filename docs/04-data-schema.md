@@ -15,6 +15,7 @@
 | `0005_invitations.sql` | `invitations` テーブル＋ `accept_invitation(token)`（招待リンク方式） |
 | `0006_ai_entitlements.sql` | `org_entitlements`（組織別の月次AI下書き上限） |
 | `0007_platform_admin.sql` | 事業管理者向け：`platform_admins`（運営者ロール）・`platform_audit_log`（追記専用）・`v_admin_tenant_summary`（横断サマリ）。**いずれも anon/authenticated から不可視・service_role限定** |
+| `0008_impersonation.sql` | `impersonation_sessions`（代理ログイン・読み取り専用・30分期限。service_role限定） |
 
 ---
 

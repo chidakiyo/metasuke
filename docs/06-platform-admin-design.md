@@ -2,14 +2,15 @@
 
 > 3層アクターモデルの最上位「事業管理者（サービス提供者＝自社）」が使う運営コンソールの設計。
 > テナント用アプリ（`apps/web`）とは**別物**として安全に作る。
-> ステータス: 🟢 **Phase A 実装済み**（2026-06-25）／ B〜D は設計のみ
+> ステータス: 🟢 **Phase A・B 実装済み**（2026-06-25）／ C〜D は設計のみ
 > 最終更新: 2026-06-25
 
 ## 実装状況（2026-06-25）
-- ✅ **Phase A 実装済み**：別アプリ `apps/admin`（Vite+React, dev ポート5175）＋ `supabase/functions/admin`（service_role・運営者検証・監査記録）＋ `supabase/migrations/0007_platform_admin.sql`。
+- ✅ **Phase A 実装済み**：別アプリ `apps/admin`（Vite+React, dev ポート5175）＋ `supabase/functions/admin`（service_role・運営者検証・監査記録）＋ `0007_platform_admin.sql`。
   - 提供機能：**PA-01 テナント一覧/検索・PA-02 詳細・PA-03 利用状況・PA-04 監査ログ・PA-05 運営者ロール**（ロールはDB登録まで。追加/削除UIは未）。
   - 運営者アカウントは**テナントとは別**（dev: `chidakiyo+admin@gmail.com`, superadmin）。
-- ⏳ 未実装：PA-05の運営者管理UI、Phase B（代理ログイン）、C（課金/フラグ/お知らせ）、D（不正検知/ヘルス）。
+- ✅ **Phase B 実装済み（PA-06 代理ログイン）**：`0008_impersonation.sql`（`impersonation_sessions`）。**安全側＝サーバ経由の読み取り専用**（テナントの資格情報は使わない）。理由必須・30分期限・常時バナー・専用監査（start/view_ticket/end）・セッション失効後403。admin関数に `/impersonate` 系ルート、admin appに代理閲覧UI（読み取り専用のチケット一覧/スレッド）。
+- ⏳ 未実装：PA-05の運営者管理UI、Phase C（課金/フラグ/お知らせ）、D（不正検知/ヘルス）。代理での書き込み（既定は読み取り専用のまま）。
 
 ---
 
@@ -106,7 +107,7 @@ org_entitlements       (org_id PK, ai_enabled, monthly_ai_token_limit,
 ## 5. 段階導入プラン
 
 - **Phase A（最小・土台）✅実装済み**：別アプリ `apps/admin` ＋ `platform_admins`/`platform_audit_log`/`v_admin_tenant_summary`（0007）＋ admin Edge Function（service_role・運営者検証・監査記録）＋ **PA-01/02/03/04**（テナント一覧・詳細・利用状況・監査）。PA-05はロールのDB登録のみ（管理UIは未）。
-- **Phase B**：**PA-06 代理ログイン**（厳重な監査・時間制限・読み取り専用）。
+- **Phase B ✅実装済み**：**PA-06 代理ログイン**（`0008`・読み取り専用・理由必須・30分期限・常時バナー・専用監査・サーバ経由でテナント資格情報を使わない）。
 - **Phase C**：**PA-07/08/09/10**（テナント操作・フィーチャーフラグ・Stripe課金・お知らせ）。
 - **Phase D**：**PA-11/12/13**（不正検知・ヘルス・サポート文脈）。
 
