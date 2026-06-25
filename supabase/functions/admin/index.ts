@@ -120,4 +120,83 @@ app.get('/audit', async (c) => {
   return c.json({ events: data ?? [] });
 });
 
+// ===== 代理ログイン（impersonation・読み取り専用） =====
+// テナントの資格情報は使わず、admin関数が service_role で当該orgに限定して返す。
+// 各データルートは「自分の・終了していない・期限内」のセッションを必須にする。
+
+async function activeSession(db: SupabaseClient, adminId: string, id: string) {
+  const { data } = await db.from('impersonation_sessions').select('*')
+    .eq('id', id).eq('admin_id', adminId).is('ended_at', null).maybeSingle();
+  if (!data) return null;
+  if (new Date(data.expires_at).getTime() < Date.now()) return null; // 期限切れ
+  return data;
+}
+async function orgName(db: SupabaseClient, orgId: string): Promise<string> {
+  const { data } = await db.from('organizations').select('name').eq('id', orgId).maybeSingle();
+  return data?.name ?? '';
+}
+
+// 開始（理由必須）
+app.post('/impersonate', async (c) => {
+  const ctx = await authPlatformAdmin(c.req.header('Authorization'));
+  if (!ctx) return c.json({ error: 'forbidden' }, 403);
+  let body: { org_id?: string; reason?: string };
+  try { body = await c.req.json(); } catch { return c.json({ error: 'invalid json' }, 400); }
+  if (!body.org_id || !body.reason?.trim()) return c.json({ error: 'org_id と reason は必須' }, 400);
+  const { data: session, error } = await ctx.db.from('impersonation_sessions')
+    .insert({ admin_id: ctx.uid, target_org_id: body.org_id, reason: body.reason.trim() })
+    .select('*').single();
+  if (error) return c.json({ error: error.message }, 400);
+  await audit(ctx.db, ctx.uid, 'impersonate.start', { target_org_id: body.org_id, reason: body.reason.trim() });
+  return c.json({ session, org_name: await orgName(ctx.db, body.org_id) });
+});
+
+// 現在有効なセッション（バナー復元用）
+app.get('/impersonate/active', async (c) => {
+  const ctx = await authPlatformAdmin(c.req.header('Authorization'));
+  if (!ctx) return c.json({ error: 'forbidden' }, 403);
+  const { data } = await ctx.db.from('impersonation_sessions').select('*')
+    .eq('admin_id', ctx.uid).is('ended_at', null).gt('expires_at', new Date().toISOString())
+    .order('started_at', { ascending: false }).limit(1).maybeSingle();
+  return c.json({ session: data ?? null, org_name: data ? await orgName(ctx.db, data.target_org_id) : null });
+});
+
+// 終了
+app.post('/impersonate/:id/end', async (c) => {
+  const ctx = await authPlatformAdmin(c.req.header('Authorization'));
+  if (!ctx) return c.json({ error: 'forbidden' }, 403);
+  const { data } = await ctx.db.from('impersonation_sessions').update({ ended_at: new Date().toISOString() })
+    .eq('id', c.req.param('id')).eq('admin_id', ctx.uid).is('ended_at', null).select('target_org_id').maybeSingle();
+  if (data) await audit(ctx.db, ctx.uid, 'impersonate.end', { target_org_id: data.target_org_id });
+  return c.json({ ok: true });
+});
+
+// 代理閲覧: チケット一覧（読み取り専用）
+app.get('/impersonate/:id/tickets', async (c) => {
+  const ctx = await authPlatformAdmin(c.req.header('Authorization'));
+  if (!ctx) return c.json({ error: 'forbidden' }, 403);
+  const s = await activeSession(ctx.db, ctx.uid, c.req.param('id'));
+  if (!s) return c.json({ error: 'impersonation session not active' }, 403);
+  const { data } = await ctx.db.from('tickets')
+    .select('id,subject,status,is_read,last_message_at,contact:contacts(name,email)')
+    .eq('org_id', s.target_org_id).order('last_message_at', { ascending: false, nullsFirst: false });
+  return c.json({ tickets: data ?? [] });
+});
+
+// 代理閲覧: スレッド（読み取り専用）。閲覧を監査。
+app.get('/impersonate/:id/tickets/:ticketId', async (c) => {
+  const ctx = await authPlatformAdmin(c.req.header('Authorization'));
+  if (!ctx) return c.json({ error: 'forbidden' }, 403);
+  const s = await activeSession(ctx.db, ctx.uid, c.req.param('id'));
+  if (!s) return c.json({ error: 'impersonation session not active' }, 403);
+  const ticketId = c.req.param('ticketId');
+  const { data: ticket } = await ctx.db.from('tickets').select('id').eq('id', ticketId).eq('org_id', s.target_org_id).maybeSingle();
+  if (!ticket) return c.json({ error: 'ticket not found' }, 404);
+  const { data: messages } = await ctx.db.from('messages')
+    .select('id,direction,from_addr,subject,body_text,created_at')
+    .eq('ticket_id', ticketId).order('created_at', { ascending: true });
+  await audit(ctx.db, ctx.uid, 'impersonate.view_ticket', { target_org_id: s.target_org_id, payload: { ticket_id: ticketId } });
+  return c.json({ messages: messages ?? [] });
+});
+
 Deno.serve(app.fetch);
