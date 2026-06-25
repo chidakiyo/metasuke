@@ -52,6 +52,13 @@ function SignedIn({ session }: { session: Session }) {
   const [view, setView] = useState<'inbox' | 'members'>('inbox');
   const [notice, setNotice] = useState<string | null>(null);
   const [showProfile, setShowProfile] = useState(false);
+  const [myName, setMyName] = useState<string | null>(null);
+
+  async function loadMyName() {
+    const { data } = await supabase.from('profiles').select('display_name').eq('user_id', session.user.id).maybeSingle();
+    setMyName((data?.display_name as string | null) ?? null);
+  }
+  useEffect(() => { void loadMyName(); }, []);
 
   async function loadOrgs(): Promise<Organization[]> {
     const { data } = await supabase.from('organizations').select('*').order('created_at');
@@ -122,7 +129,7 @@ function SignedIn({ session }: { session: Session }) {
               ))}
             </select>
           )}
-          <span style={{ color: '#999', fontSize: 13 }}>{session.user.email}</span>
+          <span title={session.user.email ?? ''} style={{ color: '#555', fontSize: 13 }}>{myName ?? session.user.email}</span>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button style={{ ...button, background: '#fff', color: '#333', border: '1px solid #ccc' }} onClick={() => setShowProfile(true)}>
@@ -133,7 +140,7 @@ function SignedIn({ session }: { session: Session }) {
           </button>
         </div>
       </div>
-      {showProfile && <ProfileModal email={session.user.email ?? ''} onClose={() => setShowProfile(false)} />}
+      {showProfile && <ProfileModal email={session.user.email ?? ''} onClose={() => { setShowProfile(false); void loadMyName(); }} />}
 
       {notice && (
         <div style={{ ...card, background: '#f0fdf4', color: '#166534' }}>

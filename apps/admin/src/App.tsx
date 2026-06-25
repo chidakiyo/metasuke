@@ -96,6 +96,15 @@ function Console({ role, email }: { role: string; email: string }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [imper, setImper] = useState<Imper | null>(null);
   const [showProfile, setShowProfile] = useState(false);
+  const [myName, setMyName] = useState<string | null>(null);
+
+  async function loadMyName() {
+    const { data: u } = await supabase.auth.getUser();
+    if (!u.user) return;
+    const { data } = await supabase.from('profiles').select('display_name').eq('user_id', u.user.id).maybeSingle();
+    setMyName((data?.display_name as string | null) ?? null);
+  }
+  useEffect(() => { void loadMyName(); }, []);
 
   // 代理セッションの復元（リロードしてもバナーを維持）
   useEffect(() => {
@@ -109,13 +118,13 @@ function Console({ role, email }: { role: string; email: string }) {
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <span style={{ fontSize: 13, color: '#94a3b8' }}>{email}・権限: <b style={{ color: '#e2e8f0' }}>{role}</b></span>
+        <span title={email} style={{ fontSize: 13, color: '#94a3b8' }}>{myName ?? email}・権限: <b style={{ color: '#e2e8f0' }}>{role}</b></span>
         <div style={{ display: 'flex', gap: 8 }}>
           <button style={buttonGhost} onClick={() => setShowProfile(true)}>プロフィール</button>
           <button style={buttonGhost} onClick={() => supabase.auth.signOut()}>ログアウト</button>
         </div>
       </div>
-      {showProfile && <ProfileModalAdmin email={email} onClose={() => setShowProfile(false)} />}
+      {showProfile && <ProfileModalAdmin email={email} onClose={() => { setShowProfile(false); void loadMyName(); }} />}
       <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid #334155', marginBottom: 16 }}>
         <Tab active={tab === 'tenants'} onClick={() => { setTab('tenants'); setSelected(null); }}>テナント</Tab>
         <Tab active={tab === 'audit'} onClick={() => { setTab('audit'); setSelected(null); }}>監査ログ</Tab>
