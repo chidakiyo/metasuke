@@ -88,11 +88,28 @@
 
 ### 送信（outbound）
 1. Hono が `Message`(direction=outbound) を作成。
-2. メールSaaS送信APIで、組織の認証済みドメインから `In-Reply-To` を付けて送信。
-3. 送信結果（成功/バウンス/苦情）を webhook で受け、ステータス・履歴に反映。
+2. メールSaaS(Mailgun)が**MTA（実送信）**。From は **`inboxes.from_domain` ＋ `dkim_verified` で分岐**：
+   - `dkim_verified=true` → `From: support@テナントドメイン`（**ブランド送信**。テナントが SPF/DKIM の **TXT** を追加＝MXに非干渉なので転送受信と共存）。
+   - `false` → **metasukeの認証済みドメインから送信**（フォールバック。Zendesk式：検証前はSaaSドメイン、検証後は自社ドメイン）。
+3. **Reply-To に ticket トークン**（例 `t+<ticket_id>@inbound.metasuke.app`）を付け、顧客の返信を metasuke ドメインに集約＋スレッド連結を堅牢化（In-Reply-To/References に依存しない）。
+4. 送信結果（成功/バウンス/苦情）を webhook で受け、ステータス・履歴に反映。
+5. （将来の別解）テナントのSMTP/OAuthで本人として送る（Zendeskの認証SMTPコネクタ相当・新規DNS不要だが認証情報保持が必要）。
+
+### メール接続方式（テナント単位の設定・競合準拠）
+競合（メールディーラー/Re:lation/yaritori/Zendesk/Freshdesk）の調査結果として、**MTAにテナント独自ドメインを増やす方式は使われていない**。接続方式は**テナント単位の設定（DBの inbox に持つ）**として実装し、Route/ドメインは増やさない。
+
+| 方式 | 内容 | Gmail/M365 | 自前サーバ | 優先 |
+|---|---|---|---|---|
+| **転送（Forwarding）** | テナントが support@ を metasuke の受信アドレスに転送。受信ドメイン1つ・Route1本 | ✅ | ✅ | **基本（採用・実装済み）** |
+| **OAuth（Gmail/M365 API）** | 既存メールボックスにOAuth接続して取得・送信。最も良い体験 | ✅本命 | ✗ | 次（本命） |
+| **IMAP/POP＋パスワード** | 既存メールボックスをポーリング取得 | ✗(基本認証廃止) | ✅ | 最後（自前向け） |
+
+重要：**Gmail/M365 は基本認証(IMAP/POPパスワード)を廃止済み → これらは OAuth 必須**。IMAP/POPパスワードは自前メールサーバ専用。よって順番は **転送（universal・今すぐ）→ OAuth Gmail→M365（大手向け本命）→ IMAP（レガシー）**。
+
+接続方式・認証情報は inbox（または専用テーブル）に保持。認証情報/トークンは**暗号化保存**（BYOKの鍵保管と同方式）。IMAP/OAuthは**webhookでなく定期ポーリング(cron: pg_cron＋取得関数)**が必要。
 
 ### マルチテナントとMTAの関係
-**Mailgun自体はテナントを知らない**。Mailgunは「受信→webhookへPOST」までで、**どのテナント宛かはアプリ側が宛先(recipient)アドレスから解決**する（`ingest_inbound_email` が `inboxes.inbound_address` を引く）。これがマルチテナント受信の肝。
+**Mailgun自体はテナントを知らない**。Mailgunは「受信→webhookへPOST」までで、**どのテナント宛かはアプリ側が宛先(recipient)アドレスから解決**する（`ingest_inbound_email` が `inboxes.inbound_address` を引く）。これがマルチテナント受信の肝。テナント判別は**宛先アドレス**で行うため、各受信箱に一意アドレスを払い出す。
 
 ### ドメイン戦略（採用）
 - **案A（推奨・MVP）**：共通受信ドメイン1つ＋キャッチオールRoute1本。各テナント受信箱に一意アドレスを払い出し、テナントは自社 `support@…` を**転送**（DNS不要）。送信ブランド化したいテナントだけ自社ドメインのDKIM/SPFを設定。
@@ -106,6 +123,10 @@
 4. `supabase secrets set MAILGUN_WEBHOOK_SIGNING_KEY=...`（署名検証を有効化）→ `supabase functions deploy inbound`。
 5. 送信は `supabase secrets set MAILGUN_API_KEY=... MAILGUN_DOMAIN=...` → `deploy send`、送信ドメインの DKIM/SPF 認証。
 6. テナントアプリで受信箱を作成（`inbound_address` をその受信ドメイン上のアドレスに）。
+
+### 開発時の受信（外部MUA不要・本番直結）
+転送方式は外部に Gmail 等の MUA が要る。開発では**自分の(サブ)ドメインのMXをMailgunへ向け**、`match_recipient(".*@inbound.<自分のドメイン>")` の Route 1本にすると、**任意のメールクライアントから直接 `acme@inbound.<自分のドメイン>` 宛に送って受信テスト**できる（外部転送不要）。これは**本番の案A（共通ドメイン）と同一構成**なのでそのまま育つ。サンドボックスは「ドメイン取得前のつなぎ」。
+- ⚠ Route式は **catch_all を避け `match_recipient` でドメイン限定**（同一Mailgunアカウントを他アプリと共用しても衝突しないため）。
 
 ❓TODO: バウンス・苦情・自動応答ループ対策の具体化。
 
