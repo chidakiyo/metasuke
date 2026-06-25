@@ -83,7 +83,8 @@ docs/            設計ドキュメント（下の索引参照）
 - ✅ テナント Phase 0〜4a（受信→対応→二重対応防止→AI下書き）＋メンバー招待
 - ✅ 事業管理者 Phase A（テナント一覧/詳細/利用状況/監査/運営者ロール）＋ Phase B（代理ログイン・読み取り専用・理由必須・期限・監査）
 - ✅ プロフィール管理（両アプリのヘッダーから 名前/メール/パスワード 変更。名前=profiles直接更新, メール/PW=auth.updateUser, メール変更は profiles へ同期トリガ 0009）
-- ⏳ 実OpenAI/実Mailgun有効化、Cloudflare Pages配信、prod環境、BYOK(4b)、運営Phase C〜D、Phase5機能群
+- ✅ **実Mailgun送受信（dev: `mailgun.chidakiyo.com`）**：受信箱設定UI→Mailgun Route(forward)→webhook(署名検証ON `MAILGUN_WEBHOOK_SIGNING_KEY`)→チケット化／HTML安全表示（DOMPurify+iframe隔離+画像ブロック）／ブランド送信(DKIM)＋Reply-Toトークンで双方向ループ実証済み。受信箱の運用停止(0010)・返信トークン(0011)。
+- ⏳ 実OpenAI有効化、OAuth(Gmail)連携、Cloudflare Pages配信、prod環境（CORS制限・admin保護）、BYOK(4b)、運営Phase C〜D、Phase5機能群
 
 ## メンテナンス方針
 - **機能追加・構成変更・運用知見が出たらこの CLAUDE.md と該当 `docs/` を更新**してからコミットする。
