@@ -91,7 +91,22 @@
 2. メールSaaS送信APIで、組織の認証済みドメインから `In-Reply-To` を付けて送信。
 3. 送信結果（成功/バウンス/苦情）を webhook で受け、ステータス・履歴に反映。
 
-❓TODO: 受信アドレスの割り当て方式（組織サブドメイン / エイリアス / 顧客ドメインMX）。
+### マルチテナントとMTAの関係
+**Mailgun自体はテナントを知らない**。Mailgunは「受信→webhookへPOST」までで、**どのテナント宛かはアプリ側が宛先(recipient)アドレスから解決**する（`ingest_inbound_email` が `inboxes.inbound_address` を引く）。これがマルチテナント受信の肝。
+
+### ドメイン戦略（採用）
+- **案A（推奨・MVP）**：共通受信ドメイン1つ＋キャッチオールRoute1本。各テナント受信箱に一意アドレスを払い出し、テナントは自社 `support@…` を**転送**（DNS不要）。送信ブランド化したいテナントだけ自社ドメインのDKIM/SPFを設定。
+- **案B（将来）**：テナントごとに独自ドメイン（Mailgun APIでドメイン＋Route自動生成、テナントはMX＋DKIMをDNS設定）。
+- 共有送信は送信者レピュテーションを共有する点に注意（規模が出たら分離）。
+
+### Mailgun連携手順（実装側は対応済み：inbound関数がmultipart＋署名検証を処理）
+1. 受信ドメイン（例 `inbound.example.com`）を Mailgun に追加。
+2. DNSに **MXレコード**（`mxa.mailgun.org` / `mxb.mailgun.org`）を設定。
+3. Mailgun **Route**（catch-all 等）→ action: forward → `https://<ref>.supabase.co/functions/v1/inbound`。
+4. `supabase secrets set MAILGUN_WEBHOOK_SIGNING_KEY=...`（署名検証を有効化）→ `supabase functions deploy inbound`。
+5. 送信は `supabase secrets set MAILGUN_API_KEY=... MAILGUN_DOMAIN=...` → `deploy send`、送信ドメインの DKIM/SPF 認証。
+6. テナントアプリで受信箱を作成（`inbound_address` をその受信ドメイン上のアドレスに）。
+
 ❓TODO: バウンス・苦情・自動応答ループ対策の具体化。
 
 ---

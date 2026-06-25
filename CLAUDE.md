@@ -52,6 +52,7 @@ docs/            設計ドキュメント（下の索引参照）
 - **service_role は Edge Functions 内のみ**。横断（全org）アクセスは admin 関数が service_role で行い、`platform_admins` 検証＋`platform_audit_log` 記録してから返す。
 - **AI = OpenAI**（プロバイダ抽象化・将来Claude等差替可・BYOK予定）。最安モデル既定 `gpt-4o-mini`（env `OPENAI_MODEL`）。
 - **AIもメールも「キー未設定なら dry-run」**で動く（OPENAI/MAILGUN secrets を入れると実動作に切替）。
+- **受信(inbound)はMailgun本番形式(multipart/form-data＋署名検証)と開発用JSONの両対応**。Mailgun連携手順は下記。マルチテナント振り分けは「recipientアドレス→inbox→org」を `ingest_inbound_email` が解決（Mailgunはテナントを知らない／振り分けはアプリ側）。
 - **送信は人間承認**（AI下書きは挿入のみ・自動送信しない）。
 - 監査トリガ `log_ticket_changes`（status/assign→events）、運営は `platform_audit_log`（追記専用）。
 
